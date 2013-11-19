@@ -124,6 +124,9 @@ if __name__ == '__main__':
                     winval = winval.replace("%@", "{" + str(replaceidx) + "}")
                     replaceidx = replaceidx + 1
 
+                # replace \n with actual newlines
+                winval = winval.replace("\\n", "\n")
+
 
                 valuenode.text = winval
 
