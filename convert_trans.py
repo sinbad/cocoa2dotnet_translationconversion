@@ -121,8 +121,8 @@ if __name__ == '__main__':
                 winval = macval
                 replaceidx = 0;
                 while winval.find("%@") != -1:
-                    winval = winval.replace("%@", "{" + str(replaceidx) + "}")
-                    replaceidx = replaceidx + 1
+                    winval = winval.replace("%@", "{" + str(replaceidx) + "}", 1)
+                    replaceidx += 1
 
                 # replace \n with actual newlines
                 winval = winval.replace("\\n", "\n")
