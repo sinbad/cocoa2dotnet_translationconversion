@@ -14,6 +14,8 @@ def usage():
     print '     --update    Overwrite existing strings in the output'
     print '                 (The default is to only complete new strings)'
     print '     --output=   Write result to given file instead of resx.out'
+    print '     --mac_en=   Mac english file to use to find other matching keys'
+    print '     --win_en=   Windows english file to use to find other matching keys'
     print '     macfile     A Mac localisation file (Localizable.strings)'
     print '     resxfile    An existing .resx file to port translations to'
     print '  NOTE: if you want to call without "python" prefix, make sure'
@@ -38,6 +40,55 @@ def readlocalizable(file):
 
     return ret
 
+def readresx(file):
+    # Read a .resx and return a map of keys -> strings
+
+    ret = dict()
+
+    dom = ET.parse(file)
+
+    # now iterate over resx entries and fill in
+    # They are under root > data
+    # <data name="DiscardLines" xml:space="preserve">
+    #   <value></value>
+    # </data>
+    root = dom.getroot()
+
+    for node in root.iter('data'):
+        key = node.attrib["name"]
+
+        # value is stored in a subnode called 'value'
+        valuenode = node.find("value")
+
+        if valuenode is not None:
+            ret[key] = valuenode.text
+
+    return ret
+
+
+def loadwintomackeyconversion(macfile, winfile):
+    # Load the English versions of mac and windows, and match the values up
+    # to determine when keys are different
+    # We return a mapping from Windows key to Mac key
+    ret = dict()
+
+    macdict = readlocalizable(macfile)
+    windict = readresx(winfile)
+
+    # we're actually trying to match up the values in order to pick up mismatched keys
+    # but early-out if there are matching keys already
+    for winkey,winval in windict.iteritems():
+        if not winkey in macdict:
+            # need to replace Windows '{n}' with %@ to match
+            winval = re.sub("\\{\\d\\}", "%@", winval)
+            for mackey,macval in macdict.iteritems():
+                if winval == macval:
+                    ret[winkey] = mackey
+                    print "Matched alternative key " + winkey + " -> " + mackey
+
+    return ret
+
+
 
 
 
@@ -46,9 +97,12 @@ if __name__ == '__main__':
     resxfile = None
     outputfile = None
     updateExisting = False
+    macEnglish = None
+    winEnglish = None
+    winToMacKeyConversion = None
     
     try:                                
-        opts, args = getopt.getopt(sys.argv[1:], "huo:", ["help", "update", "output"]) 
+        opts, args = getopt.getopt(sys.argv[1:], "huo:m:w:", ["help", "update", "output=", "mac_en=", "win_en="]) 
     except getopt.GetoptError, err: 
         print str(err)
         usage()                          
@@ -62,6 +116,10 @@ if __name__ == '__main__':
             updateExisting = True
         elif opt in ("-o", "--output"):
             outputfile = arg
+        elif opt in ("-m", "--mac_en"):
+            macEnglish = arg
+        elif opt in ("-w", "--win_en"):
+            winEnglish = arg
 
 
     #print opts
@@ -89,6 +147,14 @@ if __name__ == '__main__':
         usage()
         sys.exit(5)
 
+    if (macEnglish is not None and winEnglish is not None and \
+        os.path.exists(macEnglish) and os.path.exists(winEnglish)):
+        winToMacKeyConversion = loadwintomackeyconversion(macEnglish, winEnglish)
+
+
+
+
+
     # open target resx
     resxdom = ET.parse(resxfile)
 
@@ -108,6 +174,13 @@ if __name__ == '__main__':
         winkey = node.attrib["name"]
         #print "Looking for string for: " + winkey
         macval = macdict.get(winkey)
+
+        if macval is None and winToMacKeyConversion is not None:
+            # try to get an alternative key
+            mackey = winToMacKeyConversion.get(winkey)
+            if mackey is not None:
+                macval = macdict.get(mackey)
+
 
         if macval is not None and len(macval) > 0:
             #print "Found string: " + macval
